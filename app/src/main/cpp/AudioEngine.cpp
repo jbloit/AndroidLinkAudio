@@ -4,12 +4,76 @@
 
 #include "AudioEngine.h"
 #include "logging_macros.h"
+#include <inttypes.h>
+#include <cstring>
+
+// ------------------------------------------------------------------------------------------------
+//                                           RENDERING
+// ------------------------------------------------------------------------------------------------
+
+DataCallbackResult
+AudioEngine::onAudioReady(AudioStream *audioStream, void *audioData, int32_t numFrames) {
+
+    int32_t bufferSize = audioStream->getBufferSizeInFrames();
+
+    if (mBufferSizeSelection == kBufferSizeAutomatic) {
+        mLatencyTuner->tune();
+    } else if (bufferSize != (mBufferSizeSelection * mFramesPerBurst)) {
+        audioStream->setBufferSizeInFrames(mBufferSizeSelection * mFramesPerBurst);
+        bufferSize = audioStream->getBufferSizeInFrames();
+    }
+
+    int32_t channelCount = audioStream->getChannelCount();
+
+    if (audioStream->getFormat() == oboe::AudioFormat::Float) {
+
+        // Logic: successive renders are ADDED to the initial zero buffer.
+
+        // zero-fill buffer
+        memset(static_cast<float *>(audioData), 0,
+               sizeof(float) * channelCount * numFrames);
+
+        // sinewave synth
+        for (int i = 0; i < channelCount; ++i) {
+            mOscillators[i].render(static_cast<float *>(audioData) + i, channelCount, numFrames);
+        }
+
+    } else
+        // ---------------------------------------------------------------------------------
+        //                  RENDER TO INT16 INSTEAD OF FLOAT
+        // ---------------------------------------------------------------------------------
+    {
+        // zero-fill buffer
+        memset(static_cast<uint16_t *>(audioData), 0,
+               sizeof(int16_t) * channelCount * numFrames);
+
+    }
+
+    return DataCallbackResult::Continue;
+}
 
 
+void AudioEngine::prepareOscillators() {
+
+    double frequency = 440.0;
+    constexpr double interval = 110.0;
+    constexpr float amplitude = 0.4;
+
+    for (SineGenerator &osc : mOscillators){
+        osc.setup(frequency, mSampleRate, amplitude);
+        frequency += interval;
+    }
+}
+
+
+
+
+// ------------------------------------------------------------------------------------------------
+//                                           LIFECYCLE
+// ------------------------------------------------------------------------------------------------
 AudioEngine::AudioEngine() {
     createPlaybackStream();
 }
-
 
 AudioEngine::~AudioEngine() {
     closeOutputStream();
@@ -34,6 +98,8 @@ void AudioEngine::createPlaybackStream() {
 
         // Set the buffer size to the burst size - this will give us the minimum possible latency
         mPlayStream->setBufferSizeInFrames(mFramesPerBurst);
+
+        prepareOscillators();
 
         // Create a latency tuner which will automatically tune our buffer size.
         mLatencyTuner = std::unique_ptr<oboe::LatencyTuner>(new oboe::LatencyTuner(*mPlayStream));
@@ -77,3 +143,4 @@ void AudioEngine::setupPlaybackStreamParameters(oboe::AudioStreamBuilder *builde
     builder->setPerformanceMode(oboe::PerformanceMode::LowLatency);
     builder->setCallback(this);
 }
+
