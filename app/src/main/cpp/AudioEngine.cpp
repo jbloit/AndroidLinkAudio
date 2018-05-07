@@ -25,6 +25,16 @@ AudioEngine::onAudioReady(AudioStream *audioStream, void *audioData, int32_t num
 
     int32_t channelCount = audioStream->getChannelCount();
 
+    auto sessionState = link.captureAudioSessionState();
+    const auto hostTime = mHostTimeFilter.sampleTimeToHostTime(mSampleTime);
+    mSampleTime += numFrames;
+
+    std::chrono::milliseconds latencyMs(static_cast<std::int64_t>(mCurrentOutputLatencyMillis));
+    std::chrono::microseconds latencyMuSec(latencyMs);
+    const std::chrono::microseconds bufferBeginAtOutput = hostTime + latencyMuSec;
+    const auto microsPerSample = 1e6 / mSampleRate;
+
+
     if (audioStream->getFormat() == oboe::AudioFormat::Float) {
 
         // Logic: successive renders are ADDED to the initial zero buffer.
@@ -32,6 +42,9 @@ AudioEngine::onAudioReady(AudioStream *audioStream, void *audioData, int32_t num
         // zero-fill buffer
         memset(static_cast<float *>(audioData), 0,
                sizeof(float) * channelCount * numFrames);
+
+        renderBarClick(static_cast<float *>(audioData) + 1, channelCount,
+                       numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
 
         // sinewave synth
         for (int i = 0; i < channelCount; ++i) {
@@ -47,6 +60,10 @@ AudioEngine::onAudioReady(AudioStream *audioStream, void *audioData, int32_t num
         memset(static_cast<uint16_t *>(audioData), 0,
                sizeof(int16_t) * channelCount * numFrames);
 
+    }
+
+    if (mIsLatencyDetectionSupported) {
+        calculateCurrentOutputLatencyMillis(audioStream, &mCurrentOutputLatencyMillis);
     }
 
     return DataCallbackResult::Continue;
@@ -65,14 +82,42 @@ void AudioEngine::prepareOscillators() {
     }
 }
 
+void AudioEngine::renderBarClick(float *buffer,
+                                     int32_t channelStride,
+                                     int32_t numFrames,
+                                     ableton::Link::SessionState sessionState,
+                                     std::chrono::microseconds bufferBeginAtOutput,
+                                     double microsPerSample) {
+    for (int i = 0, sampleIndex = 0; i < numFrames; i++) {
 
-
+        const auto sampleHostTime = bufferBeginAtOutput + std::chrono::microseconds(llround(i * microsPerSample));
+        float sample = 0;
+        const double barPhase = sessionState.phaseAtTime(sampleHostTime, mQuantum);
+        if ((barPhase - mLastBarPhase) < -(mQuantum/2)) {
+            // uncomment if you want to render a click on each bar.
+            sample = 1.0;
+            LOGD("BAR PHASE AT TICK: %f, lastBarPhase %f", barPhase, mLastBarPhase);
+            timeAtLastBar = sampleHostTime;
+        }
+        buffer[sampleIndex] +=  sample;
+        sampleIndex += channelStride;
+        mLastBarPhase = barPhase;
+    }
+}
 
 // ------------------------------------------------------------------------------------------------
 //                                           LIFECYCLE
 // ------------------------------------------------------------------------------------------------
-AudioEngine::AudioEngine() {
+AudioEngine::AudioEngine(): link(60.) {
+
+    mPlayStatus = stopped;
+    mLastBeatPhase = 0.;
+    mLastBarPhase = 0.;
+    mSampleTime = 0.0;
     createPlaybackStream();
+    link.enable(true);
+
+
 }
 
 AudioEngine::~AudioEngine() {
@@ -144,3 +189,39 @@ void AudioEngine::setupPlaybackStreamParameters(oboe::AudioStreamBuilder *builde
     builder->setCallback(this);
 }
 
+oboe::Result AudioEngine::calculateCurrentOutputLatencyMillis(oboe::AudioStream *stream,
+                                                     double *latencyMillis) {
+
+    // Get the time that a known audio frame was presented for playing
+    int64_t existingFrameIndex;
+    int64_t existingFramePresentationTime;
+    oboe::Result result = stream->getTimestamp(CLOCK_MONOTONIC,
+                                               &existingFrameIndex,
+                                               &existingFramePresentationTime);
+
+    if (result == oboe::Result::OK) {
+
+        // Get the write index for the next audio frame
+        int64_t writeIndex = stream->getFramesWritten();
+
+        // Calculate the number of frames between our known frame and the write index
+        int64_t frameIndexDelta = writeIndex - existingFrameIndex;
+
+        // Calculate the time which the next frame will be presented
+        int64_t frameTimeDelta = (frameIndexDelta * oboe::kNanosPerSecond) / mSampleRate;
+        int64_t nextFramePresentationTime = existingFramePresentationTime + frameTimeDelta;
+
+        // Assume that the next frame will be written at the current time
+        using namespace std::chrono;
+        int64_t nextFrameWriteTime =
+                duration_cast<nanoseconds>(steady_clock::now().time_since_epoch()).count();
+
+        // Calculate the latency
+        *latencyMillis = (double) (nextFramePresentationTime - nextFrameWriteTime)
+                         / kNanosPerMillisecond;
+    } else {
+        LOGE("Error calculating latency: %s", oboe::convertToText(result));
+    }
+
+    return result;
+}
