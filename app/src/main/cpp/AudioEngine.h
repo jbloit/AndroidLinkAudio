@@ -40,7 +40,7 @@ private:
     int32_t mSampleRate;
     int32_t mChannelCount;
     int32_t mFramesPerBurst;
-    double mCurrentOutputLatencyMillis = 0;
+    double mCurrentOutputLatencyMillis = 220;
     int32_t mBufferSizeSelection = kBufferSizeAutomatic;
     bool mIsLatencyDetectionSupported = false;
     oboe::AudioStream *mPlayStream;

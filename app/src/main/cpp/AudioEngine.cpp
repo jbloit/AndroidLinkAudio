@@ -41,7 +41,8 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32
 
     if (audioStream->getFormat() == oboe::AudioFormat::Float) {
 
-        // Logic: successive renders are ADDED to the initial zero buffer.
+        // Logic: successive renders are added
+        // to the initial zero-filled buffer.
 
         // zero-fill buffer
         memset(static_cast<float *>(audioData), 0,
@@ -49,10 +50,8 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32
 
         //
         for (int i = 0; i < channelCount; ++i) {
-
             renderBarClick(static_cast<float *>(audioData) + i, channelCount,
                            numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
-
             mOscillators[i].render(static_cast<float *>(audioData) + i, channelCount, numFrames);
         }
 
@@ -86,7 +85,7 @@ void AudioEngine::prepareOscillators() {
 
     double frequency = 440.0;
     constexpr double interval = 110.0;
-    constexpr float amplitude = 0.1;
+    constexpr float amplitude = 0.01;
 
     for (SineGenerator &osc : mOscillators){
         osc.setup(frequency, mSampleRate, amplitude);
@@ -127,7 +126,7 @@ void AudioEngine::renderBarClick(int16_t *buffer,
         const auto sampleHostTime = bufferBeginAtOutput + std::chrono::microseconds(llround(i * microsPerSample));
         int16_t sample = 0;
         const double barPhase = sessionState.phaseAtTime(sampleHostTime, mQuantum);
-        if ((barPhase - mLastBarPhase) < -(mQuantum/2)){
+        if ((barPhase - mLastBarPhase) < -(mQuantum/40)){
             // uncomment if you want to render a clik on each bar.
             sample = INT16_MAX * 1.0;
             timeAtLastBar = sampleHostTime;
