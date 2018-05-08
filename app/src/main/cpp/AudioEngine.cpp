@@ -53,7 +53,7 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32
             renderBarClick(static_cast<float *>(audioData) + i, channelCount,
                            numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
 
-//            mOscillators[i].render(static_cast<float *>(audioData) + i, channelCount, numFrames);
+            mOscillators[i].render(static_cast<float *>(audioData) + i, channelCount, numFrames);
         }
 
     } else
@@ -86,7 +86,7 @@ void AudioEngine::prepareOscillators() {
 
     double frequency = 440.0;
     constexpr double interval = 110.0;
-    constexpr float amplitude = 0.01;
+    constexpr float amplitude = 0.005;
 
     for (SineGenerator &osc : mOscillators){
         osc.setup(frequency, mSampleRate, amplitude);
