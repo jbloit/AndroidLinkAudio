@@ -65,12 +65,12 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32
         memset(static_cast<uint16_t *>(audioData), 0,
                sizeof(int16_t) * channelCount * numFrames);
 
+        renderBarClick(static_cast<int16_t *>(audioData) + 1, channelCount,
+                       numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
         //
         for (int i = 0; i < channelCount; ++i) {
-            renderBarClick(static_cast<int16_t *>(audioData) + i, channelCount,
-                           numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
 
-//            mOscillators[i].render(static_cast<int16_t *>(audioData) + i, channelCount, numFrames);
+            mOscillators[i].render(static_cast<int16_t *>(audioData) + i, channelCount, numFrames);
         }
     }
 
@@ -86,7 +86,7 @@ void AudioEngine::prepareOscillators() {
 
     double frequency = 440.0;
     constexpr double interval = 110.0;
-    constexpr float amplitude = 0.005;
+    constexpr float amplitude = 0.1;
 
     for (SineGenerator &osc : mOscillators){
         osc.setup(frequency, mSampleRate, amplitude);
@@ -117,19 +117,19 @@ void AudioEngine::renderBarClick(float *buffer,
 }
 
 void AudioEngine::renderBarClick(int16_t *buffer,
-                                 int32_t channelStride,
-                                 int32_t numFrames,
-                                 ableton::Link::SessionState sessionState,
-                                 std::chrono::microseconds bufferBeginAtOutput,
-                                 double microsPerSample) {
+                                     int32_t channelStride,
+                                     int32_t numFrames,
+                                     ableton::Link::SessionState sessionState,
+                                     std::chrono::microseconds bufferBeginAtOutput,
+                                     double microsPerSample) {
     for (int i = 0, sampleIndex = 0; i < numFrames; i++) {
 
         const auto sampleHostTime = bufferBeginAtOutput + std::chrono::microseconds(llround(i * microsPerSample));
-        float sample = 0;
+        int16_t sample = 0;
         const double barPhase = sessionState.phaseAtTime(sampleHostTime, mQuantum);
-        if ((barPhase - mLastBarPhase) < -(mQuantum/2)) {
-            // uncomment if you want to render a click on each bar.
-            sample = 1.0;
+        if ((barPhase - mLastBarPhase) < -(mQuantum/2)){
+            // uncomment if you want to render a clik on each bar.
+            sample = INT16_MAX * 1.0;
             timeAtLastBar = sampleHostTime;
         }
         buffer[sampleIndex] +=  sample;
