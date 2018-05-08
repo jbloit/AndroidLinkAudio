@@ -14,8 +14,8 @@ constexpr int32_t kDefaultChannelCount = 2; // Stereo
 //                                           RENDERING
 // ------------------------------------------------------------------------------------------------
 
-DataCallbackResult
-AudioEngine::onAudioReady(AudioStream *audioStream, void *audioData, int32_t numFrames) {
+oboe::DataCallbackResult
+AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) {
 
     int32_t bufferSize = audioStream->getBufferSizeInFrames();
 
@@ -53,7 +53,7 @@ AudioEngine::onAudioReady(AudioStream *audioStream, void *audioData, int32_t num
             renderBarClick(static_cast<float *>(audioData) + i, channelCount,
                            numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
 
-            mOscillators[i].render(static_cast<float *>(audioData) + i, channelCount, numFrames);
+//            mOscillators[i].render(static_cast<float *>(audioData) + i, channelCount, numFrames);
         }
 
     } else
@@ -65,9 +65,20 @@ AudioEngine::onAudioReady(AudioStream *audioStream, void *audioData, int32_t num
         memset(static_cast<uint16_t *>(audioData), 0,
                sizeof(int16_t) * channelCount * numFrames);
 
+        //
+        for (int i = 0; i < channelCount; ++i) {
+            renderBarClick(static_cast<int16_t *>(audioData) + i, channelCount,
+                           numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
+
+//            mOscillators[i].render(static_cast<int16_t *>(audioData) + i, channelCount, numFrames);
+        }
     }
 
-    return DataCallbackResult::Continue;
+    if (mIsLatencyDetectionSupported) {
+        calculateCurrentOutputLatencyMillis(audioStream, &mCurrentOutputLatencyMillis);
+    }
+
+    return oboe::DataCallbackResult::Continue;
 }
 
 
@@ -75,7 +86,7 @@ void AudioEngine::prepareOscillators() {
 
     double frequency = 440.0;
     constexpr double interval = 110.0;
-    constexpr float amplitude = 0.4;
+    constexpr float amplitude = 0.01;
 
     for (SineGenerator &osc : mOscillators){
         osc.setup(frequency, mSampleRate, amplitude);
@@ -97,7 +108,28 @@ void AudioEngine::renderBarClick(float *buffer,
         if ((barPhase - mLastBarPhase) < -(mQuantum/2)) {
             // uncomment if you want to render a click on each bar.
             sample = 1.0;
-            LOGD("BAR PHASE AT TICK: %f, lastBarPhase %f", barPhase, mLastBarPhase);
+            timeAtLastBar = sampleHostTime;
+        }
+        buffer[sampleIndex] +=  sample;
+        sampleIndex += channelStride;
+        mLastBarPhase = barPhase;
+    }
+}
+
+void AudioEngine::renderBarClick(int16_t *buffer,
+                                 int32_t channelStride,
+                                 int32_t numFrames,
+                                 ableton::Link::SessionState sessionState,
+                                 std::chrono::microseconds bufferBeginAtOutput,
+                                 double microsPerSample) {
+    for (int i = 0, sampleIndex = 0; i < numFrames; i++) {
+
+        const auto sampleHostTime = bufferBeginAtOutput + std::chrono::microseconds(llround(i * microsPerSample));
+        float sample = 0;
+        const double barPhase = sessionState.phaseAtTime(sampleHostTime, mQuantum);
+        if ((barPhase - mLastBarPhase) < -(mQuantum/2)) {
+            // uncomment if you want to render a click on each bar.
+            sample = 1.0;
             timeAtLastBar = sampleHostTime;
         }
         buffer[sampleIndex] +=  sample;
@@ -218,6 +250,66 @@ void AudioEngine::restartStream() {
         // active. This is probably because we received successive "stream disconnected" events.
         // Internal issue b/63087953
     }
+}
+
+// ------------------------------------------------------------------------------------------------
+//                                           HELPERS
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * Calculate the current latency between writing a frame to the output stream and
+ * the same frame being presented to the audio hardware.
+ *
+ * Here's how the calculation works:
+ *
+ * 1) Get the time a particular frame was presented to the audio hardware
+ * @see AudioStream::getTimestamp
+ * 2) From this extrapolate the time which the *next* audio frame written to the stream
+ * will be presented
+ * 3) Assume that the next audio frame is written at the current time
+ * 4) currentLatency = nextFramePresentationTime - nextFrameWriteTime
+ *
+ * @param stream The stream being written to
+ * @param latencyMillis pointer to a variable to receive the latency in milliseconds between
+ * writing a frame to the stream and that frame being presented to the audio hardware.
+ * @return oboe::Result::OK or a oboe::Result::Error* value. It is normal to receive an error soon
+ * after a stream has started because the timestamps are not yet available.
+ */
+oboe::Result AudioEngine::calculateCurrentOutputLatencyMillis(oboe::AudioStream *stream,
+                                                     double *latencyMillis) {
+
+    // Get the time that a known audio frame was presented for playing
+    int64_t existingFrameIndex;
+    int64_t existingFramePresentationTime;
+    oboe::Result result = stream->getTimestamp(CLOCK_MONOTONIC,
+                                               &existingFrameIndex,
+                                               &existingFramePresentationTime);
+
+    if (result == oboe::Result::OK) {
+
+        // Get the write index for the next audio frame
+        int64_t writeIndex = stream->getFramesWritten();
+
+        // Calculate the number of frames between our known frame and the write index
+        int64_t frameIndexDelta = writeIndex - existingFrameIndex;
+
+        // Calculate the time which the next frame will be presented
+        int64_t frameTimeDelta = (frameIndexDelta * oboe::kNanosPerSecond) / mSampleRate;
+        int64_t nextFramePresentationTime = existingFramePresentationTime + frameTimeDelta;
+
+        // Assume that the next frame will be written at the current time
+        using namespace std::chrono;
+        int64_t nextFrameWriteTime =
+                duration_cast<nanoseconds>(steady_clock::now().time_since_epoch()).count();
+
+        // Calculate the latency
+        *latencyMillis = (double) (nextFramePresentationTime - nextFrameWriteTime)
+                         / kNanosPerMillisecond;
+    } else {
+        LOGE("Error calculating latency: %s", oboe::convertToText(result));
+    }
+
+    return result;
 }
 
 

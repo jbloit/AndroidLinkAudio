@@ -16,9 +16,8 @@ constexpr int32_t kMaximumChannelCount = 2 ;
 
 enum PlayStatus {stopped, paused, armed, playing};
 
-using namespace oboe;
 
-class AudioEngine: AudioStreamCallback {
+class AudioEngine: oboe::AudioStreamCallback {
 
 public:
     AudioEngine();
@@ -27,7 +26,7 @@ public:
 
     void enableLink(bool enableFlag);
     void createStream();
-    DataCallbackResult onAudioReady(AudioStream *audioStream, void *audioData, int32_t numFrames);
+    oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames);
 
 private:
 
@@ -51,11 +50,9 @@ private:
     void restartStream();
 
     // AUDIO ENGINE
-
     std::array<SineGenerator, kMaximumChannelCount> mOscillators;
     void prepareOscillators();
-//    void renderSinewave(float *buffer, int32_t channel, int32_t numFrames);
-    Result calculateCurrentOutputLatencyMillis(oboe::AudioStream *stream, double *latencyMillis);
+    oboe::Result calculateCurrentOutputLatencyMillis(oboe::AudioStream *stream, double *latencyMillis);
     PlayStatus mPlayStatus;
     void renderBarClick(float *buffer,
                         int32_t channelStride,
@@ -63,7 +60,14 @@ private:
                         ableton::Link::SessionState sessionState,
                         std::chrono::microseconds bufferBeginAtOutput,
                         double microsPerSample);
-    // -------------------------- Link
+    void renderBarClick(int16_t *buffer,
+                        int32_t channelStride,
+                        int32_t numFrames,
+                        ableton::Link::SessionState sessionState,
+                        std::chrono::microseconds bufferBeginAtOutput,
+                        double microsPerSample);
+
+    // ABLETON LINK
     ableton::Link link;
     double mSampleTime;
     ableton::link::HostTimeFilter<ableton::link::platform::Clock> mHostTimeFilter;
