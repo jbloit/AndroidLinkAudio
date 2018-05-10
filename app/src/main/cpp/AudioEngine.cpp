@@ -49,10 +49,12 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32
                sizeof(float) * channelCount * numFrames);
 
         //
-        for (int i = 0; i < channelCount; ++i) {
-            renderBarClick(static_cast<float *>(audioData) + i, channelCount,
-                           numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
-            mOscillators[i].render(static_cast<float *>(audioData) + i, channelCount, numFrames);
+        if (mPlayStatus == playing){
+            for (int i = 0; i < channelCount; ++i) {
+                renderBarClick(static_cast<float *>(audioData) + i, channelCount,
+                               numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
+                mOscillators[i].render(static_cast<float *>(audioData) + i, channelCount, numFrames);
+            }
         }
 
     } else
@@ -64,12 +66,16 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32
         memset(static_cast<uint16_t *>(audioData), 0,
                sizeof(int16_t) * channelCount * numFrames);
 
-        renderBarClick(static_cast<int16_t *>(audioData) + 1, channelCount,
-                       numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
-        //
-        for (int i = 0; i < channelCount; ++i) {
 
-            mOscillators[i].render(static_cast<int16_t *>(audioData) + i, channelCount, numFrames);
+        if (mPlayStatus == playing) {
+            renderBarClick(static_cast<int16_t *>(audioData) + 1, channelCount,
+                           numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
+
+            for (int i = 0; i < channelCount; ++i) {
+
+                mOscillators[i].render(static_cast<int16_t *>(audioData) + i, channelCount,
+                                       numFrames);
+            }
         }
     }
 
@@ -94,11 +100,11 @@ void AudioEngine::prepareOscillators() {
 }
 
 void AudioEngine::renderBarClick(float *buffer,
-                                     int32_t channelStride,
-                                     int32_t numFrames,
-                                     ableton::Link::SessionState sessionState,
-                                     std::chrono::microseconds bufferBeginAtOutput,
-                                     double microsPerSample) {
+                                 int32_t channelStride,
+                                 int32_t numFrames,
+                                 ableton::Link::SessionState sessionState,
+                                 std::chrono::microseconds bufferBeginAtOutput,
+                                 double microsPerSample) {
     for (int i = 0, sampleIndex = 0; i < numFrames; i++) {
 
         const auto sampleHostTime = bufferBeginAtOutput + std::chrono::microseconds(llround(i * microsPerSample));
@@ -116,11 +122,11 @@ void AudioEngine::renderBarClick(float *buffer,
 }
 
 void AudioEngine::renderBarClick(int16_t *buffer,
-                                     int32_t channelStride,
-                                     int32_t numFrames,
-                                     ableton::Link::SessionState sessionState,
-                                     std::chrono::microseconds bufferBeginAtOutput,
-                                     double microsPerSample) {
+                                 int32_t channelStride,
+                                 int32_t numFrames,
+                                 ableton::Link::SessionState sessionState,
+                                 std::chrono::microseconds bufferBeginAtOutput,
+                                 double microsPerSample) {
     for (int i = 0, sampleIndex = 0; i < numFrames; i++) {
 
         const auto sampleHostTime = bufferBeginAtOutput + std::chrono::microseconds(llround(i * microsPerSample));
@@ -275,7 +281,7 @@ void AudioEngine::restartStream() {
  * after a stream has started because the timestamps are not yet available.
  */
 oboe::Result AudioEngine::calculateCurrentOutputLatencyMillis(oboe::AudioStream *stream,
-                                                     double *latencyMillis) {
+                                                              double *latencyMillis) {
 
     // Get the time that a known audio frame was presented for playing
     int64_t existingFrameIndex;
@@ -316,10 +322,19 @@ oboe::Result AudioEngine::calculateCurrentOutputLatencyMillis(oboe::AudioStream 
 //                                           API
 // ------------------------------------------------------------------------------------------------
 
+void AudioEngine::createStream(){
+    createPlaybackStream();
+}
+
 void AudioEngine::enableLink(bool enableFlag){
     link.enable(enableFlag);
 }
 
-void AudioEngine::createStream(){
-    createPlaybackStream();
+void AudioEngine::playAudio(bool playFlag){
+
+    if(playFlag){
+        mPlayStatus = playing;
+    } else {
+        mPlayStatus = stopped;
+    }
 }

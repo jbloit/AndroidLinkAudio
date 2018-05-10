@@ -11,6 +11,7 @@ object AudioEngine {
     external fun deleteEngine(engineHandle: Long)
     external fun linkEnable(engineHandle: Long, enableFlag: Boolean)
     external fun createStream(engineHandle: Long)
+    external fun playAudio(engineHandle: Long, playFlag: Boolean)
 
     fun create(): Boolean{
         if (mEngineHandle == 0L) {
@@ -22,6 +23,12 @@ object AudioEngine {
     fun linkEnable(flag: Boolean){
         if (mEngineHandle != 0L) {
             linkEnable(mEngineHandle, flag)
+        }
+    }
+
+    fun playAudio(flag: Boolean){
+        if (mEngineHandle != 0L) {
+            playAudio(mEngineHandle, flag)
         }
     }
 

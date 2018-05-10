@@ -14,8 +14,7 @@
 constexpr int32_t kBufferSizeAutomatic = 0;
 constexpr int32_t kMaximumChannelCount = 2 ;
 
-enum PlayStatus {stopped, paused, armed, playing};
-
+enum PlayStatus {stopped, playing};
 
 class AudioEngine: oboe::AudioStreamCallback {
 
@@ -24,9 +23,11 @@ public:
     ~AudioEngine();
 
 
-    void enableLink(bool enableFlag);
+
+    // API
     void createStream();
-    oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames);
+    void enableLink(bool enableFlag);
+    void playAudio(bool playFlag);
 
 private:
 
@@ -40,7 +41,7 @@ private:
     int32_t mSampleRate;
     int32_t mChannelCount;
     int32_t mFramesPerBurst;
-    double mCurrentOutputLatencyMillis = 220;
+    double mCurrentOutputLatencyMillis = 0;
     int32_t mBufferSizeSelection = kBufferSizeAutomatic;
     bool mIsLatencyDetectionSupported = false;
     oboe::AudioStream *mPlayStream;
@@ -48,6 +49,7 @@ private:
     std::mutex mRestartingLock;
     void closeOutputStream();
     void restartStream();
+    oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames);
 
     // AUDIO ENGINE
     std::array<SineGenerator, kMaximumChannelCount> mOscillators;

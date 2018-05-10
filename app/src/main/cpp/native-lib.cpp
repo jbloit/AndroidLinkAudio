@@ -45,6 +45,20 @@ JNIEXPORT void JNICALL Java_com_jbloit_androidlinkaudio_AudioEngine_linkEnable(
     engine->enableLink(enableFlag);
 }
 
+JNIEXPORT void JNICALL Java_com_jbloit_androidlinkaudio_AudioEngine_playAudio(
+        JNIEnv *env,
+        jclass,
+        jlong engineHandle,
+        bool playFlag) {
+
+    AudioEngine *engine = (AudioEngine *) engineHandle;
+    if (engine == nullptr) {
+        LOGE("Engine handle is invalid, call createHandle() to create a new one");
+        return;
+    }
+    engine->playAudio(playFlag);
+}
+
 JNIEXPORT void JNICALL Java_com_jbloit_androidlinkaudio_AudioEngine_createStream(
         JNIEnv *env,
         jclass,
