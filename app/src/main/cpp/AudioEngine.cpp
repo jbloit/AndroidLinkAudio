@@ -338,3 +338,7 @@ void AudioEngine::playAudio(bool playFlag){
         mPlayStatus = stopped;
     }
 }
+
+void AudioEngine::setLatencyMs(int latencyMs){
+    mCurrentOutputLatencyMillis = (double) latencyMs;
+}

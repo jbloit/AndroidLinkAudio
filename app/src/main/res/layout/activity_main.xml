@@ -54,5 +54,25 @@
             android:text="LINK " />
 
     </LinearLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:textAlignment="center">
+        <TextView
+            android:id="@+id/text_latencyMs"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Latency ms"
+            android:textAlignment="center" />
 
+        <SeekBar
+            android:id="@+id/seekBar_latencyMs"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:max="300" />
+
+    </LinearLayout>
 </LinearLayout>

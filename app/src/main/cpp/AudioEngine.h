@@ -28,6 +28,7 @@ public:
     void createStream();
     void enableLink(bool enableFlag);
     void playAudio(bool playFlag);
+    void setLatencyMs(int latencyMs);
 
 private:
 

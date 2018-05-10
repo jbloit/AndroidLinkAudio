@@ -72,4 +72,19 @@ JNIEXPORT void JNICALL Java_com_jbloit_androidlinkaudio_AudioEngine_createStream
     engine->createStream();
 }
 
+JNIEXPORT void JNICALL Java_com_jbloit_androidlinkaudio_AudioEngine_setLatencyMs(
+        JNIEnv *env,
+        jclass,
+        jlong engineHandle,
+        int latencyMs) {
+
+    AudioEngine *engine = (AudioEngine *) engineHandle;
+    if (engine == nullptr) {
+        LOGE("Engine handle is invalid, call createHandle() to create a new one");
+        return;
+    }
+    engine->setLatencyMs(latencyMs);
+}
+
+
 }

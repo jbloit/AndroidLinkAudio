@@ -12,6 +12,7 @@ object AudioEngine {
     external fun linkEnable(engineHandle: Long, enableFlag: Boolean)
     external fun createStream(engineHandle: Long)
     external fun playAudio(engineHandle: Long, playFlag: Boolean)
+    external fun setLatencyMs(engineHandle: Long, latency: Int)
 
     fun create(): Boolean{
         if (mEngineHandle == 0L) {
@@ -35,6 +36,12 @@ object AudioEngine {
     fun createAudioStream(){
         if (mEngineHandle != 0L) {
             createStream(mEngineHandle)
+        }
+    }
+
+    fun setLatency(latencyMs: Int){
+        if (mEngineHandle != 0L) {
+            setLatencyMs(mEngineHandle, latencyMs)
         }
     }
 

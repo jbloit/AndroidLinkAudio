@@ -2,10 +2,13 @@ package com.jbloit.androidlinkaudio
 
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
+import android.widget.SeekBar
 import android.widget.Toast
 import kotlinx.android.synthetic.main.activity_main.*
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
+
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -22,7 +25,24 @@ class MainActivity : AppCompatActivity() {
         toggle_playAudio.setOnCheckedChangeListener{ buttonView, isChecked ->
             AudioEngine.playAudio(isChecked)
         }
+
+        seekBar_latencyMs.setOnSeekBarChangeListener(this)
     }
+
+    // Seekbar callbacks
+    override fun onStartTrackingTouch(seekBar: SeekBar?) {
+
+    }
+
+    override fun onStopTrackingTouch(seekBar: SeekBar?) {
+
+    }
+
+    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+        AudioEngine.setLatency(progress)
+        text_latencyMs.text = "Latency : $progress ms"
+    }
+
 
     /**
      * A native method that is implemented by the 'native-lib' native library,
