@@ -83,6 +83,7 @@ private:
     void processInput(float *buffer,
                         int32_t channelStride,
                         int32_t numFrames);
+    int mLatencySampleCount = 0;
 
     // ABLETON LINK
     ableton::Link link;

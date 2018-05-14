@@ -133,6 +133,9 @@ void AudioEngine::renderBarClick(float *buffer,
             for (int j = 0; j< channelStride; j++){
                 buffer[i*channelStride + j] = 1.0;
             }
+            mLatencySampleCount = 0;
+        } else {
+            mLatencySampleCount++;
         }
         mLastBarPhase = barPhase;
     }
@@ -173,7 +176,9 @@ void AudioEngine::processInput(float *buffer,
 
         // crude onset detection
         if ( (fabsf(mInputBuffer[i]) > 0.5) && !foundOnsetInBuffer){
-            LOGE("ONSET");
+//            LOGD("ONSET %i ", mLatencySampleCount);
+//            LOGD("round trip latency %f", (double) mLatencySampleCount / mPlayStream->getSampleRate());
+            mCurrentOutputLatencyMillis = (double) mLatencySampleCount / mPlayStream->getSampleRate() * 1000;
             foundOnsetInBuffer = true;
         }
 
@@ -191,7 +196,6 @@ AudioEngine::AudioEngine(): link(240.) {
     mLastBarPhase = 0.;
     mSampleTime = 0.0;
     mChannelCount = kDefaultChannelCount;
-
 
 }
 
