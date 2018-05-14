@@ -10,7 +10,7 @@ cmake_minimum_required(VERSION 3.4.1)
 # You can define multiple libraries, and CMake builds them for you.
 # Gradle automatically packages shared libraries with your APK.
 
-set (LINK_DIR /Users/julien/LIBS/link)
+set (LINK_DIR /Users/bloit/LIBS/link)
 
 include(${LINK_DIR}/AbletonLinkConfig.cmake)
 include_directories(src/main/cpp/android-ifaddrs)
@@ -60,7 +60,7 @@ target_link_libraries( # Specifies the target library.
                        Ableton::Link)
 
 # Set the path to the Oboe directory.
-set (OBOE_DIR /Users/julien/LIBS/oboe)
+set (OBOE_DIR /Users/bloit/LIBS/oboe)
 
 # Add the Oboe library as a subdirectory in your project.
 add_subdirectory (${OBOE_DIR} ./oboe)

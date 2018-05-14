@@ -224,7 +224,26 @@ void AudioEngine::setupPlaybackStreamParameters(oboe::AudioStreamBuilder *builde
     builder->setCallback(this);
 }
 
+void AudioEngine::setupRecStreamParameters(oboe::AudioStreamBuilder *builder) {
+    builder->setAudioApi(mAudioApi);
+    builder->setDeviceId(mPlaybackDeviceId);
+    builder->setChannelCount(mChannelCount);
+    builder->setDirection(oboe::Direction::Input);
+    builder->setSharingMode(oboe::SharingMode::Exclusive);
+    builder->setPerformanceMode(oboe::PerformanceMode::LowLatency);
+}
 
+void AudioEngine::createRecStream() {
+    oboe::AudioStreamBuilder builder;
+    setupRecStreamParameters(&builder);
+    oboe::Result result = builder.openStream(&mRecStream);
+    if (result == oboe::Result::OK && mRecStream != nullptr) {
+        result = mRecStream->requestStart();
+        if (result != oboe::Result::OK) {
+            LOGE("Error starting stream. %s", oboe::convertToText(result));
+        }
+    }
+}
 
 /**
  * If there is an error with a stream this function will be called. A common example of an error
@@ -322,8 +341,10 @@ oboe::Result AudioEngine::calculateCurrentOutputLatencyMillis(oboe::AudioStream 
 //                                           API
 // ------------------------------------------------------------------------------------------------
 
+// called from the main activity's onCreate() method
 void AudioEngine::createStream(){
     createPlaybackStream();
+    createRecStream();
 }
 
 void AudioEngine::enableLink(bool enableFlag){
@@ -341,4 +362,10 @@ void AudioEngine::playAudio(bool playFlag){
 
 void AudioEngine::setLatencyMs(int latencyMs){
     mCurrentOutputLatencyMillis = (double) latencyMs;
+}
+
+void AudioEngine::detectLatency(bool flag){
+
+    mPerformLatencyDetection = flag;
+
 }

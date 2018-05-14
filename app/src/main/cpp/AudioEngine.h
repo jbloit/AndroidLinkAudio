@@ -29,10 +29,11 @@ public:
     void enableLink(bool enableFlag);
     void playAudio(bool playFlag);
     void setLatencyMs(int latencyMs);
+    void detectLatency(bool flag);
 
 private:
 
-    // AUDIO STREAM
+    // AUDIO STREAM(s)
     void createPlaybackStream();
     void setupPlaybackStreamParameters(oboe::AudioStreamBuilder *builder);
     void onErrorAfterClose(oboe::AudioStream *oboeStream, oboe::Result error);
@@ -52,6 +53,10 @@ private:
     void restartStream();
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames);
 
+    void setupRecStreamParameters(oboe::AudioStreamBuilder *builder);
+    void createRecStream();
+    oboe::AudioStream *mRecStream;
+
     // AUDIO ENGINE
     std::array<SineGenerator, kMaximumChannelCount> mOscillators;
     void prepareOscillators();
@@ -69,6 +74,8 @@ private:
                         ableton::Link::SessionState sessionState,
                         std::chrono::microseconds bufferBeginAtOutput,
                         double microsPerSample);
+
+    bool mPerformLatencyDetection = false;
 
     // ABLETON LINK
     ableton::Link link;
