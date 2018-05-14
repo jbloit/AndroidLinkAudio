@@ -39,42 +39,54 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32
     const auto microsPerSample = 1e6 / mSampleRate;
 
 
-    if (audioStream->getFormat() == oboe::AudioFormat::Float) {
-
-        // Logic: successive renders are added
-        // to the initial zero-filled buffer.
-
-        // zero-fill buffer
-        memset(static_cast<float *>(audioData), 0,
-               sizeof(float) * channelCount * numFrames);
-
-        //
-        if (mPlayStatus == playing){
-            for (int i = 0; i < channelCount; ++i) {
-                renderBarClick(static_cast<float *>(audioData) + i, channelCount,
-                               numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
-                mOscillators[i].render(static_cast<float *>(audioData) + i, channelCount, numFrames);
-            }
+    // The callback does a non-blocking read from the input stream placing the data into the buffer of the output stream.
+    int64_t timeoutNanos = 100 * kNanosPerMillisecond;
+    if (mPerformLatencyDetection) {
+        oboe::ErrorOrValue<int32_t> result = mRecStream->read(audioData, numFrames, timeoutNanos);
+        if (!result) {
+            LOGE("Got error %s", convertToText(result.error()));
         }
-
-    } else
-        // ---------------------------------------------------------------------------------
-        //                  RENDER TO INT16 INSTEAD OF FLOAT
-        // ---------------------------------------------------------------------------------
-    {
-        // zero-fill buffer
-        memset(static_cast<uint16_t *>(audioData), 0,
-               sizeof(int16_t) * channelCount * numFrames);
+    } else {
 
 
-        if (mPlayStatus == playing) {
-            renderBarClick(static_cast<int16_t *>(audioData) + 1, channelCount,
-                           numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
+        if (audioStream->getFormat() == oboe::AudioFormat::Float) {
 
-            for (int i = 0; i < channelCount; ++i) {
+            // Logic: successive renders are added
+            // to the initial zero-filled buffer.
 
-                mOscillators[i].render(static_cast<int16_t *>(audioData) + i, channelCount,
-                                       numFrames);
+            // zero-fill buffer
+            memset(static_cast<float *>(audioData), 0,
+                   sizeof(float) * channelCount * numFrames);
+
+            //
+            if (mPlayStatus == playing) {
+                for (int i = 0; i < channelCount; ++i) {
+                    renderBarClick(static_cast<float *>(audioData) + i, channelCount,
+                                   numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
+                    mOscillators[i].render(static_cast<float *>(audioData) + i, channelCount,
+                                           numFrames);
+                }
+            }
+
+        } else
+            // ---------------------------------------------------------------------------------
+            //                  RENDER TO INT16 INSTEAD OF FLOAT
+            // ---------------------------------------------------------------------------------
+        {
+            // zero-fill buffer
+            memset(static_cast<uint16_t *>(audioData), 0,
+                   sizeof(int16_t) * channelCount * numFrames);
+
+
+            if (mPlayStatus == playing) {
+                renderBarClick(static_cast<int16_t *>(audioData) + 1, channelCount,
+                               numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
+
+                for (int i = 0; i < channelCount; ++i) {
+
+                    mOscillators[i].render(static_cast<int16_t *>(audioData) + i, channelCount,
+                                           numFrames);
+                }
             }
         }
     }
