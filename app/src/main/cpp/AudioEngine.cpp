@@ -42,12 +42,20 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32
     // The callback does a non-blocking read from the input stream placing the data into the buffer of the output stream.
     int64_t timeoutNanos = 100 * kNanosPerMillisecond;
     if (mPerformLatencyDetection) {
-        oboe::ErrorOrValue<int32_t> result = mRecStream->read(audioData, numFrames, timeoutNanos);
-        if (!result) {
-            LOGE("Got error %s", convertToText(result.error()));
-        }
-    } else {
+        oboe::ErrorOrValue<int32_t> result = mRecStream->read(mInputBuffer, numFrames, timeoutNanos);
 
+        if (!result) {
+            LOGE("Error reading input stream %s", convertToText(result.error()));
+        }
+
+        memset(static_cast<float *>(audioData), 0,
+               sizeof(float) * channelCount * numFrames);
+
+        for (int i = 0; i < channelCount; ++i) {
+            processInput(static_cast<float *>(audioData) + i, channelCount, numFrames);
+        }
+
+    } else {
 
         if (audioStream->getFormat() == oboe::AudioFormat::Float) {
 
@@ -155,6 +163,18 @@ void AudioEngine::renderBarClick(int16_t *buffer,
     }
 }
 
+
+// the buffer param refers to the output audio buffer. the input buffer is a private property.
+void AudioEngine::processInput(float *buffer,
+                                 int32_t channelStride,
+                                 int32_t numFrames) {
+    for (int i = 0, sampleIndex = 0; i < numFrames; i++) {
+        buffer[sampleIndex] +=  mInputBuffer[i];
+        sampleIndex += channelStride;
+    }
+}
+
+
 // ------------------------------------------------------------------------------------------------
 //                                           LIFECYCLE
 // ------------------------------------------------------------------------------------------------
@@ -169,6 +189,7 @@ AudioEngine::AudioEngine(): link(240.) {
 
 AudioEngine::~AudioEngine() {
     closeOutputStream();
+    closeInputStream();
 }
 
 void AudioEngine::createPlaybackStream() {
@@ -224,6 +245,23 @@ void AudioEngine::closeOutputStream() {
     }
 }
 
+void AudioEngine::closeInputStream() {
+
+    if (mRecStream != nullptr) {
+        oboe::Result result = mRecStream->requestStop();
+        if (result != oboe::Result::OK) {
+            LOGE("Error stopping input stream. %s", oboe::convertToText(result));
+        }
+
+        result = mRecStream->close();
+        if (result != oboe::Result::OK) {
+            LOGE("Error closing input stream. %s", oboe::convertToText(result));
+        }
+
+        delete[] mInputBuffer;
+    }
+}
+
 void AudioEngine::setupPlaybackStreamParameters(oboe::AudioStreamBuilder *builder) {
     builder->setAudioApi(mAudioApi);
     builder->setDeviceId(mPlaybackDeviceId);
@@ -250,6 +288,9 @@ void AudioEngine::createRecStream() {
     setupRecStreamParameters(&builder);
     oboe::Result result = builder.openStream(&mRecStream);
     if (result == oboe::Result::OK && mRecStream != nullptr) {
+        if (mInputBuffer == nullptr) {
+            mInputBuffer = new float[mChannelCount * mRecStream->getBufferSizeInFrames()];
+        }
         result = mRecStream->requestStart();
         if (result != oboe::Result::OK) {
             LOGE("Error starting stream. %s", oboe::convertToText(result));
@@ -269,7 +310,10 @@ void AudioEngine::createRecStream() {
  * @see oboe::StreamCallback
  */
 void AudioEngine::onErrorAfterClose(oboe::AudioStream *oboeStream, oboe::Result error) {
-    if (error == oboe::Result::ErrorDisconnected) restartStream();
+    if (error == oboe::Result::ErrorDisconnected) {
+        restartStream();
+        restartRecStream();
+    }
 }
 
 void AudioEngine::restartStream() {
@@ -287,6 +331,23 @@ void AudioEngine::restartStream() {
         // Internal issue b/63087953
     }
 }
+
+void AudioEngine::restartRecStream() {
+
+    LOGI("Restarting rec stream");
+
+    if (mRestartingInputLock.try_lock()) {
+        closeInputStream();
+        createRecStream();
+        mRestartingInputLock.unlock();
+    } else {
+        LOGW("Restart stream operation already in progress - ignoring this request");
+        // We were unable to obtain the restarting lock which means the restart operation is currently
+        // active. This is probably because we received successive "stream disconnected" events.
+        // Internal issue b/63087953
+    }
+}
+
 
 // ------------------------------------------------------------------------------------------------
 //                                           HELPERS

@@ -49,8 +49,11 @@ private:
     oboe::AudioStream *mPlayStream;
     std::unique_ptr<oboe::LatencyTuner> mLatencyTuner;
     std::mutex mRestartingLock;
+    std::mutex mRestartingInputLock;
     void closeOutputStream();
+    void closeInputStream();
     void restartStream();
+    void restartRecStream();
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames);
 
     void setupRecStreamParameters(oboe::AudioStreamBuilder *builder);
@@ -76,6 +79,10 @@ private:
                         double microsPerSample);
 
     bool mPerformLatencyDetection = false;
+    float* mInputBuffer = nullptr;
+    void processInput(float *buffer,
+                        int32_t channelStride,
+                        int32_t numFrames);
 
     // ABLETON LINK
     ableton::Link link;
