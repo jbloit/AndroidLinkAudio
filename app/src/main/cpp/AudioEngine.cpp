@@ -178,7 +178,9 @@ void AudioEngine::processInput(float *buffer,
         if ( (fabsf(mInputBuffer[i]) > 0.5) && !foundOnsetInBuffer){
 //            LOGD("ONSET %i ", mLatencySampleCount);
 //            LOGD("round trip latency %f", (double) mLatencySampleCount / mPlayStream->getSampleRate());
-            mCurrentOutputLatencyMillis = (double) mLatencySampleCount / mPlayStream->getSampleRate() * 1000;
+
+            // set output latency to half round trip latency?
+            mCurrentOutputLatencyMillis = ((double) mLatencySampleCount / mPlayStream->getSampleRate() * 1000) / 2.0;
             foundOnsetInBuffer = true;
         }
 
@@ -452,5 +454,8 @@ void AudioEngine::setLatencyMs(int latencyMs){
 void AudioEngine::detectLatency(bool flag){
 
     mPerformLatencyDetection = flag;
+}
 
+double AudioEngine::getLatencyMs(){
+    return mCurrentOutputLatencyMillis;
 }

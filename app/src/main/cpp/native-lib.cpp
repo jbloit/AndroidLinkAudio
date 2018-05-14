@@ -100,5 +100,19 @@ JNIEXPORT void JNICALL Java_com_jbloit_androidlinkaudio_AudioEngine_detectLatenc
     engine->detectLatency(flag);
 }
 
+JNIEXPORT double JNICALL Java_com_jbloit_androidlinkaudio_AudioEngine_getLatencyMs(
+        JNIEnv *env,
+        jclass,
+        jlong engineHandle
+        ) {
+
+    AudioEngine *engine = (AudioEngine *) engineHandle;
+    if (engine == nullptr) {
+        LOGE("Engine handle is invalid, call createHandle() to create a new one");
+        return -1.0;
+    }
+    return engine->getLatencyMs();
+}
+
 
 }

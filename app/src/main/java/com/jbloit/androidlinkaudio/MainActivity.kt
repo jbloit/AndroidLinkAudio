@@ -1,6 +1,7 @@
 package com.jbloit.androidlinkaudio
 
 import android.Manifest
+import android.animation.TimeAnimator
 import android.content.pm.PackageManager
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
@@ -11,7 +12,7 @@ import kotlinx.android.synthetic.main.activity_main.*
 
 class MainActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
 
-
+    private val animationLoop: TimeAnimator = TimeAnimator()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,6 +37,13 @@ class MainActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
         }
 
         seekBar_latencyMs.setOnSeekBarChangeListener(this)
+
+        startAnimationLoop()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        stopAnimationLoop()
     }
 
     // Seekbar callbacks
@@ -81,6 +89,23 @@ class MainActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
     private fun hasPermission(permission: String): Boolean {
         val check = ActivityCompat.checkSelfPermission(this, permission)
         return check == PackageManager.PERMISSION_GRANTED
+    }
+
+
+    //region ANIMATION LOOP
+    fun pollEngine(delta: Long){
+
+        val currentLatencyMs = AudioEngine.getLatency()
+        text_latencyDetection.text = "Detected latency: $currentLatencyMs"
+    }
+    fun startAnimationLoop(){
+        animationLoop.setTimeListener(TimeAnimator.TimeListener({ animation, totalTime, deltaTime ->  pollEngine(deltaTime)}))
+        animationLoop.start()
+    }
+    fun stopAnimationLoop(){
+        animationLoop.cancel()
+        animationLoop.setTimeListener(null)
+        animationLoop.removeAllListeners()
     }
 
 }

@@ -30,6 +30,7 @@ public:
     void playAudio(bool playFlag);
     void setLatencyMs(int latencyMs);
     void detectLatency(bool flag);
+    double getLatencyMs();
 
 private:
 

@@ -14,6 +14,7 @@ object AudioEngine {
     external fun playAudio(engineHandle: Long, playFlag: Boolean)
     external fun setLatencyMs(engineHandle: Long, latency: Int)
     external fun detectLatency(engineHandle: Long, flag: Boolean)
+    external fun getLatencyMs(engineHandle: Long): Double
 
     fun create(): Boolean{
         if (mEngineHandle == 0L) {
@@ -50,6 +51,14 @@ object AudioEngine {
         if (mEngineHandle != 0L) {
             detectLatency(mEngineHandle, flag)
         }
+    }
+
+    fun getLatency(): Double {
+        var returnVal = 0.0
+        if (mEngineHandle != 0L) {
+            returnVal = getLatencyMs(mEngineHandle)
+        }
+        return returnVal
     }
 
     fun delete() {
