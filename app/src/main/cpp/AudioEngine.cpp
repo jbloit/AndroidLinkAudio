@@ -39,65 +39,62 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32
     const auto microsPerSample = 1e6 / mSampleRate;
 
 
-    // The callback does a non-blocking read from the input stream placing the data into the buffer of the output stream.
     int64_t timeoutNanos = 100 * kNanosPerMillisecond;
-    if (mPerformLatencyDetection) {
-        oboe::ErrorOrValue<int32_t> result = mRecStream->read(mInputBuffer, numFrames, timeoutNanos);
 
-        if (!result) {
-            LOGE("Error reading input stream %s", convertToText(result.error()));
-        }
 
+    if (audioStream->getFormat() == oboe::AudioFormat::Float) {
+
+        // Logic: successive renders are added
+        // to the initial zero-filled buffer.
+
+        // zero-fill buffer
         memset(static_cast<float *>(audioData), 0,
                sizeof(float) * channelCount * numFrames);
 
-        for (int i = 0; i < channelCount; ++i) {
-            processInput(static_cast<float *>(audioData) + i, channelCount, numFrames);
-        }
+        //
+        if (mPlayStatus == playing || mPerformLatencyDetection) {
 
-    } else {
+            renderBarClick(static_cast<float *>(audioData) , channelCount,
+                           numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
 
-        if (audioStream->getFormat() == oboe::AudioFormat::Float) {
-
-            // Logic: successive renders are added
-            // to the initial zero-filled buffer.
-
-            // zero-fill buffer
-            memset(static_cast<float *>(audioData), 0,
-                   sizeof(float) * channelCount * numFrames);
-
-            //
-            if (mPlayStatus == playing) {
-                for (int i = 0; i < channelCount; ++i) {
-                    renderBarClick(static_cast<float *>(audioData) + i, channelCount,
-                                   numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
-                    mOscillators[i].render(static_cast<float *>(audioData) + i, channelCount,
-                                           numFrames);
-                }
+            for (int i = 0; i < channelCount; ++i) {
+                mOscillators[i].render(static_cast<float *>(audioData) + i, channelCount,
+                                       numFrames);
             }
 
-        } else
-            // ---------------------------------------------------------------------------------
-            //                  RENDER TO INT16 INSTEAD OF FLOAT
-            // ---------------------------------------------------------------------------------
-        {
-            // zero-fill buffer
-            memset(static_cast<uint16_t *>(audioData), 0,
-                   sizeof(int16_t) * channelCount * numFrames);
+            if (mPerformLatencyDetection) {
+                // The callback does a non-blocking read from the input stream placing the data into the internal input buffer.
+                oboe::ErrorOrValue<int32_t> result = mRecStream->read(mInputBuffer, numFrames, timeoutNanos);
 
-
-            if (mPlayStatus == playing) {
-                renderBarClick(static_cast<int16_t *>(audioData) + 1, channelCount,
-                               numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
-
-                for (int i = 0; i < channelCount; ++i) {
-
-                    mOscillators[i].render(static_cast<int16_t *>(audioData) + i, channelCount,
-                                           numFrames);
+                if (!result) {
+                    LOGE("Error reading input stream %s", convertToText(result.error()));
                 }
+                processInput(static_cast<float *>(audioData) , channelCount, numFrames);
+            }
+        }
+
+    } else
+        // ---------------------------------------------------------------------------------
+        //                  RENDER TO INT16 INSTEAD OF FLOAT
+        // ---------------------------------------------------------------------------------
+    {
+        // zero-fill buffer
+        memset(static_cast<uint16_t *>(audioData), 0,
+               sizeof(int16_t) * channelCount * numFrames);
+
+
+        if (mPlayStatus == playing) {
+            renderBarClick(static_cast<int16_t *>(audioData) + 1, channelCount,
+                           numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
+
+            for (int i = 0; i < channelCount; ++i) {
+
+                mOscillators[i].render(static_cast<int16_t *>(audioData) + i, channelCount,
+                                       numFrames);
             }
         }
     }
+
 
     if (mIsLatencyDetectionSupported) {
         calculateCurrentOutputLatencyMillis(audioStream, &mCurrentOutputLatencyMillis);
@@ -125,18 +122,18 @@ void AudioEngine::renderBarClick(float *buffer,
                                  ableton::Link::SessionState sessionState,
                                  std::chrono::microseconds bufferBeginAtOutput,
                                  double microsPerSample) {
-    for (int i = 0, sampleIndex = 0; i < numFrames; i++) {
+    for (int i = 0; i < numFrames; i++) {
 
         const auto sampleHostTime = bufferBeginAtOutput + std::chrono::microseconds(llround(i * microsPerSample));
-        float sample = 0;
+
         const double barPhase = sessionState.phaseAtTime(sampleHostTime, mQuantum);
+
         if ((barPhase - mLastBarPhase) < -(mQuantum/2)) {
-            // uncomment if you want to render a click on each bar.
-            sample = 1.0;
             timeAtLastBar = sampleHostTime;
+            for (int j = 0; j< channelStride; j++){
+                buffer[i*channelStride + j] = 1.0;
+            }
         }
-        buffer[sampleIndex] +=  sample;
-        sampleIndex += channelStride;
         mLastBarPhase = barPhase;
     }
 }
@@ -166,10 +163,20 @@ void AudioEngine::renderBarClick(int16_t *buffer,
 
 // the buffer param refers to the output audio buffer. the input buffer is a private property.
 void AudioEngine::processInput(float *buffer,
-                                 int32_t channelStride,
-                                 int32_t numFrames) {
+                               int32_t channelStride,
+                               int32_t numFrames) {
+    bool foundOnsetInBuffer = false;
     for (int i = 0, sampleIndex = 0; i < numFrames; i++) {
-        buffer[sampleIndex] +=  mInputBuffer[i];
+
+        // Uncomment to copy input into output buffer
+//        buffer[sampleIndex] +=  mInputBuffer[i];
+
+        // crude onset detection
+        if ( (fabsf(mInputBuffer[i]) > 0.5) && !foundOnsetInBuffer){
+            LOGE("ONSET");
+            foundOnsetInBuffer = true;
+        }
+
         sampleIndex += channelStride;
     }
 }
@@ -184,6 +191,7 @@ AudioEngine::AudioEngine(): link(240.) {
     mLastBarPhase = 0.;
     mSampleTime = 0.0;
     mChannelCount = kDefaultChannelCount;
+
 
 }
 
