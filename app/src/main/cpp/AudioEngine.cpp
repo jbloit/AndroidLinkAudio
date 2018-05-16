@@ -38,9 +38,7 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32
     const std::chrono::microseconds bufferBeginAtOutput = hostTime + latencyMuSec;
     const auto microsPerSample = 1e6 / mSampleRate;
 
-
     int64_t timeoutNanos = 100 * kNanosPerMillisecond;
-
 
     if (audioStream->getFormat() == oboe::AudioFormat::Float) {
 
@@ -82,15 +80,24 @@ AudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32
         memset(static_cast<uint16_t *>(audioData), 0,
                sizeof(int16_t) * channelCount * numFrames);
 
+        if (mPlayStatus == playing || mPerformLatencyDetection) {
 
-        if (mPlayStatus == playing) {
-            renderBarClick(static_cast<int16_t *>(audioData) + 1, channelCount,
+            renderBarClick(static_cast<int16_t *>(audioData) , channelCount,
                            numFrames, sessionState, bufferBeginAtOutput, microsPerSample);
 
             for (int i = 0; i < channelCount; ++i) {
-
                 mOscillators[i].render(static_cast<int16_t *>(audioData) + i, channelCount,
                                        numFrames);
+            }
+
+            if (mPerformLatencyDetection) {
+                // The callback does a non-blocking read from the input stream placing the data into the internal input buffer.
+                oboe::ErrorOrValue<int32_t> result = mRecStream->read(mInputBuffer_int16, numFrames, timeoutNanos);
+
+                if (!result) {
+                    LOGE("Error reading input stream %s", convertToText(result.error()));
+                }
+                processInput(static_cast<int16_t *>(audioData) , channelCount, numFrames);
             }
         }
     }
@@ -147,21 +154,25 @@ void AudioEngine::renderBarClick(int16_t *buffer,
                                  ableton::Link::SessionState sessionState,
                                  std::chrono::microseconds bufferBeginAtOutput,
                                  double microsPerSample) {
-    for (int i = 0, sampleIndex = 0; i < numFrames; i++) {
+    for (int i = 0; i < numFrames; i++) {
 
         const auto sampleHostTime = bufferBeginAtOutput + std::chrono::microseconds(llround(i * microsPerSample));
-        int16_t sample = 0;
+
         const double barPhase = sessionState.phaseAtTime(sampleHostTime, mQuantum);
-        if ((barPhase - mLastBarPhase) < -(mQuantum/40)){
-            // uncomment if you want to render a clik on each bar.
-            sample = INT16_MAX * 1.0;
+
+        if ((barPhase - mLastBarPhase) < -(mQuantum/2)) {
             timeAtLastBar = sampleHostTime;
+            for (int j = 0; j< channelStride; j++){
+                buffer[i*channelStride + j] = INT16_MAX * 1.0;
+            }
+            mLatencySampleCount = 0;
+        } else {
+            mLatencySampleCount++;
         }
-        buffer[sampleIndex] +=  sample;
-        sampleIndex += channelStride;
         mLastBarPhase = barPhase;
     }
 }
+
 
 
 // the buffer param refers to the output audio buffer. the input buffer is a private property.
@@ -176,14 +187,28 @@ void AudioEngine::processInput(float *buffer,
 
         // crude onset detection
         if ( (fabsf(mInputBuffer[i]) > 0.5) && !foundOnsetInBuffer){
-//            LOGD("ONSET %i ", mLatencySampleCount);
-//            LOGD("round trip latency %f", (double) mLatencySampleCount / mPlayStream->getSampleRate());
-
-            // set output latency to half round trip latency?
-            mCurrentOutputLatencyMillis = ((double) mLatencySampleCount / mPlayStream->getSampleRate() * 1000) / 2.0;
+            mDetectedOutputLatencyMillis = ((double) mLatencySampleCount / mPlayStream->getSampleRate() * 1000);
             foundOnsetInBuffer = true;
         }
+        sampleIndex += channelStride;
+    }
+}
 
+// the buffer param refers to the output audio buffer. the input buffer is a private property.
+void AudioEngine::processInput(int16_t *buffer,
+                               int32_t channelStride,
+                               int32_t numFrames) {
+    bool foundOnsetInBuffer = false;
+    for (int i = 0, sampleIndex = 0; i < numFrames; i++) {
+
+        // Uncomment to copy input into output buffer
+//        buffer[sampleIndex] +=  mInputBuffer[i];
+
+        // crude onset detection
+        if ( (abs(mInputBuffer_int16[i]) > (INT16_MAX * 0.5)) && !foundOnsetInBuffer){
+            mDetectedOutputLatencyMillis = ((double) mLatencySampleCount / mPlayStream->getSampleRate() * 1000);
+            foundOnsetInBuffer = true;
+        }
         sampleIndex += channelStride;
     }
 }
@@ -273,6 +298,7 @@ void AudioEngine::closeInputStream() {
         }
 
         delete[] mInputBuffer;
+        delete[] mInputBuffer_int16;
     }
 }
 
@@ -305,6 +331,10 @@ void AudioEngine::createRecStream() {
         if (mInputBuffer == nullptr) {
             mInputBuffer = new float[mChannelCount * mRecStream->getBufferSizeInFrames()];
         }
+        if (mInputBuffer_int16 == nullptr) {
+            mInputBuffer_int16 = new int16_t[mChannelCount * mRecStream->getBufferSizeInFrames()];
+        }
+
         result = mRecStream->requestStart();
         if (result != oboe::Result::OK) {
             LOGE("Error starting stream. %s", oboe::convertToText(result));
@@ -457,5 +487,5 @@ void AudioEngine::detectLatency(bool flag){
 }
 
 double AudioEngine::getLatencyMs(){
-    return mCurrentOutputLatencyMillis;
+    return mDetectedOutputLatencyMillis;
 }

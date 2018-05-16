@@ -57,7 +57,7 @@ class MainActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
 
     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
         AudioEngine.setLatency(progress)
-        text_latencyMs.text = "Latency : $progress ms"
+        text_latencyMs.text = "Output Latency : $progress ms \n Set to a little more than roundtrip latency"
     }
 
 
@@ -91,12 +91,11 @@ class MainActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
         return check == PackageManager.PERMISSION_GRANTED
     }
 
-
     //region ANIMATION LOOP
     fun pollEngine(delta: Long){
 
-        val currentLatencyMs = AudioEngine.getLatency()
-        text_latencyDetection.text = "Detected latency: $currentLatencyMs"
+        val detectedLatencyMs = AudioEngine.getLatency()
+        text_latencyDetection.text = "Detected round trip latency: $detectedLatencyMs ms"
     }
     fun startAnimationLoop(){
         animationLoop.setTimeListener(TimeAnimator.TimeListener({ animation, totalTime, deltaTime ->  pollEngine(deltaTime)}))

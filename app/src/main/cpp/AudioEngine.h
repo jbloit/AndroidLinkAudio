@@ -45,6 +45,7 @@ private:
     int32_t mChannelCount;
     int32_t mFramesPerBurst;
     double mCurrentOutputLatencyMillis = 0;
+    double mDetectedOutputLatencyMillis = 0;
     int32_t mBufferSizeSelection = kBufferSizeAutomatic;
     bool mIsLatencyDetectionSupported = false;
     oboe::AudioStream *mPlayStream;
@@ -81,9 +82,13 @@ private:
 
     bool mPerformLatencyDetection = false;
     float* mInputBuffer = nullptr;
+    int16_t * mInputBuffer_int16 = nullptr;
     void processInput(float *buffer,
                         int32_t channelStride,
                         int32_t numFrames);
+    void processInput(int16_t *buffer,
+                      int32_t channelStride,
+                      int32_t numFrames);
     int mLatencySampleCount = 0;
 
     // ABLETON LINK
